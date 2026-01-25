@@ -58,12 +58,17 @@ def summarize_article(article: NewsArticle, api_key: Optional[str] = None) -> st
         },
     )
 
+    # 全文があれば全文を、なければdescriptionを使用
+    content = article.content_for_summary
+    content_source = "全文" if article.full_content else "概要"
+    logger.info(f"Using {content_source} for summarization ({len(content)} chars)")
+
     prompt = f"""以下のニュース記事を日本語で3〜4行で要約してください。
 要点を簡潔にまとめ、読者が内容を素早く理解できるようにしてください。
 
 タイトル: {article.title}
 カテゴリ: {article.category}
-内容: {article.description if article.description else "（本文なし）"}
+内容: {content if content else "（本文なし）"}
 
 要約:"""
 
