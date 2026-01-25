@@ -1,0 +1,10 @@
+services:
+  news-bot:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      # 設定ファイルをホットリロード可能に
+      - ./config:/app/config:ro
+      # ログファイルをホストに出力
+      - ./logs:/app/logs

@@ -1,0 +1,23 @@
+# ニュースソース設定
+# カテゴリやソースを追加・変更する場合はこのファイルを編集してください
+
+# 取得するニュース数
+max_articles: 5
+
+# カテゴリ設定
+categories:
+  - name: "生成AI"
+    enabled: true
+    sources:
+      - url: "https://news.google.com/rss/search?q=生成AI&hl=ja&gl=JP&ceid=JP:ja"
+        name: "Google News - 生成AI"
+    sources:
+      - url: "https://rss.itmedia.co.jp/rss/2.0/aiplus.xml"
+        name: "ITmedia AI＋ - 生成AI"
+
+# カテゴリを追加する例:
+# - name: "セキュリティ"
+#   enabled: true
+#   sources:
+#     - url: "https://news.google.com/rss/search?q=サイバーセキュリティ&hl=ja&gl=JP&ceid=JP:ja"
+#       name: "Google News - セキュリティ"
