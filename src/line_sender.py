@@ -36,7 +36,7 @@ def create_news_message(articles_with_summaries: list[tuple[NewsArticle, str]]) 
     today = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y/%m/%d")
     number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
 
-    lines = [f"📰 本日のテックニュース ({today})", ""]
+    lines = [f"📰 本日の生成AIニュース ({today})", ""]
 
     for i, (article, summary) in enumerate(articles_with_summaries):
         emoji = number_emojis[i] if i < len(number_emojis) else f"{i+1}."
