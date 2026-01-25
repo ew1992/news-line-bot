@@ -5,11 +5,13 @@ RSSフィードからニュースを取得し、重複を除去して返す
 
 import re
 import feedparser
+import requests
 import yaml
+from bs4 import BeautifulSoup
 from pathlib import Path
 from datetime import datetime, timedelta
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, Any
 import hashlib
 
 from .logger import get_logger
@@ -18,6 +20,10 @@ logger = get_logger(__name__)
 
 # 類似度の閾値（0.0〜1.0、高いほど厳しい）
 SIMILARITY_THRESHOLD = 0.5
+
+# 全文取得の設定
+REQUEST_TIMEOUT = 10  # 秒
+MAX_CONTENT_LENGTH = 5000  # 文字数
 
 
 @dataclass
@@ -29,11 +35,125 @@ class NewsArticle:
     published: Optional[datetime]
     source: str
     category: str
+    full_content: str = field(default="")  # 全文
 
     @property
     def id(self) -> str:
         """記事の一意なIDを生成（URLベース）"""
         return hashlib.md5(self.url.encode()).hexdigest()
+
+    @property
+    def content_for_summary(self) -> str:
+        """要約用のコンテンツを取得（全文があれば全文、なければdescription）"""
+        if self.full_content:
+            return self.full_content
+        return self.description
+
+
+def fetch_article_content(url: str) -> str:
+    """
+    記事URLから全文を取得する
+
+    Args:
+        url: 記事のURL
+
+    Returns:
+        記事の本文（取得できない場合は空文字列）
+    """
+    try:
+        logger.info(f"Fetching full content from: {url[:50]}...")
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+
+        response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
+
+        # エンコーディングを適切に処理
+        response.encoding = response.apparent_encoding
+
+        soup = BeautifulSoup(response.text, "lxml")
+
+        # 不要な要素を削除
+        for tag in soup.find_all(["script", "style", "nav", "header", "footer", "aside", "iframe", "noscript"]):
+            tag.decompose()
+
+        # 記事本文を抽出（複数のセレクタを試す）
+        content = ""
+
+        # 一般的な記事本文のセレクタ
+        selectors = [
+            "article",
+            '[class*="article-body"]',
+            '[class*="article_body"]',
+            '[class*="articleBody"]',
+            '[class*="entry-content"]',
+            '[class*="post-content"]',
+            '[class*="main-content"]',
+            '[class*="content-body"]',
+            '[itemprop="articleBody"]',
+            ".article-content",
+            ".post-body",
+            ".entry-body",
+            "main",
+        ]
+
+        for selector in selectors:
+            element = soup.select_one(selector)
+            if element:
+                # テキストを抽出
+                paragraphs = element.find_all(["p", "h1", "h2", "h3", "h4", "h5", "h6"])
+                if paragraphs:
+                    content = "\n".join(p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True))
+                else:
+                    content = element.get_text(separator="\n", strip=True)
+
+                if len(content) > 100:  # 十分な長さがあれば採用
+                    break
+
+        # セレクタで取得できない場合は、全体のpタグから取得
+        if len(content) < 100:
+            paragraphs = soup.find_all("p")
+            content = "\n".join(p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20)
+
+        # クリーンアップ
+        content = re.sub(r"\n{3,}", "\n\n", content)
+        content = content.strip()
+
+        # 長すぎる場合は切り詰め
+        if len(content) > MAX_CONTENT_LENGTH:
+            content = content[:MAX_CONTENT_LENGTH] + "..."
+
+        logger.info(f"Fetched {len(content)} characters from article")
+        return content
+
+    except requests.exceptions.Timeout:
+        logger.warning(f"Timeout fetching article: {url}")
+        return ""
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Failed to fetch article content from {url}: {e}")
+        return ""
+    except Exception as e:
+        logger.error(f"Error parsing article content from {url}: {e}")
+        return ""
+
+
+def fetch_full_content_for_articles(articles: list["NewsArticle"]) -> list["NewsArticle"]:
+    """
+    記事リストの全文を取得する
+
+    Args:
+        articles: 記事のリスト
+
+    Returns:
+        全文が追加された記事のリスト
+    """
+    for article in articles:
+        content = fetch_article_content(article.url)
+        article.full_content = content
+
+    return articles
 
 
 def normalize_title(title: str) -> str:
@@ -95,7 +215,7 @@ def load_config(config_path: Optional[Path] = None) -> dict:
         return yaml.safe_load(f)
 
 
-def parse_published_date(entry: dict) -> Optional[datetime]:
+def parse_published_date(entry: Any) -> Optional[datetime]:
     """記事の公開日時をパースする"""
     if hasattr(entry, "published_parsed") and entry.published_parsed:
         try:
