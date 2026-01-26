@@ -25,7 +25,7 @@ def get_channel_access_token(token: Optional[str] = None) -> str:
 
 def create_news_message(articles_with_summaries: list[tuple[NewsArticle, str]]) -> str:
     """
-    ニュースメッセージを作成
+    ニュースメッセージを作成（テキスト形式）
 
     Args:
         articles_with_summaries: (記事, 要約) のタプルのリスト
@@ -53,12 +53,138 @@ def create_news_message(articles_with_summaries: list[tuple[NewsArticle, str]]) 
     return "\n".join(lines).strip()
 
 
-def send_broadcast(message: str, channel_access_token: Optional[str] = None) -> bool:
+def truncate_text(text: str, max_length: int) -> str:
+    """テキストを指定の長さに切り詰める"""
+    if len(text) <= max_length:
+        return text
+    return text[:max_length - 1] + "…"
+
+
+def create_carousel_message(articles_with_summaries: list[tuple[NewsArticle, str]]) -> Optional[dict]:
     """
-    全ての友だちにメッセージをブロードキャスト送信
+    カルーセルテンプレートメッセージを作成（旧形式、文字数制限あり）
 
     Args:
-        message: 送信するメッセージ
+        articles_with_summaries: (記事, 要約) のタプルのリスト
+
+    Returns:
+        カルーセルテンプレートメッセージのdict、記事がない場合はNone
+    """
+    if not articles_with_summaries:
+        return None
+
+    max_columns = 10
+    articles = articles_with_summaries[:max_columns]
+
+    columns = []
+    for article, summary in articles:
+        title = truncate_text(article.title, 40)
+        text = truncate_text(summary, 60)
+
+        column = {
+            "title": title,
+            "text": text,
+            "actions": [
+                {
+                    "type": "uri",
+                    "label": "記事を読む",
+                    "uri": article.url
+                }
+            ]
+        }
+        columns.append(column)
+
+    today = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y/%m/%d")
+
+    return {
+        "type": "template",
+        "altText": f"本日の生成AIニュース ({today})",
+        "template": {
+            "type": "carousel",
+            "columns": columns
+        }
+    }
+
+
+def create_flex_carousel_message(articles_with_summaries: list[tuple[NewsArticle, str]]) -> Optional[dict]:
+    """
+    Flex Messageカルーセル形式でニュースメッセージを作成
+
+    Args:
+        articles_with_summaries: (記事, 要約) のタプルのリスト
+
+    Returns:
+        Flex Messageのdict、記事がない場合はNone
+    """
+    if not articles_with_summaries:
+        return None
+
+    max_bubbles = 10
+    articles = articles_with_summaries[:max_bubbles]
+
+    bubbles = []
+    for article, summary in articles:
+        bubble = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": article.title,
+                        "weight": "bold",
+                        "size": "md",
+                        "wrap": True
+                    },
+                    {
+                        "type": "text",
+                        "text": summary,
+                        "size": "sm",
+                        "color": "#666666",
+                        "margin": "lg",
+                        "wrap": True
+                    }
+                ],
+                "paddingAll": "xl"
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "link",
+                        "action": {
+                            "type": "uri",
+                            "label": "記事を読む",
+                            "uri": article.url
+                        }
+                    }
+                ],
+                "paddingAll": "lg"
+            }
+        }
+        bubbles.append(bubble)
+
+    today = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y/%m/%d")
+
+    return {
+        "type": "flex",
+        "altText": f"本日の生成AIニュース ({today})",
+        "contents": {
+            "type": "carousel",
+            "contents": bubbles
+        }
+    }
+
+
+def send_messages(messages: list[dict], channel_access_token: Optional[str] = None) -> bool:
+    """
+    メッセージをブロードキャスト送信
+
+    Args:
+        messages: 送信するメッセージのリスト（LINE Messaging API形式）
         channel_access_token: LINE Channel Access Token
 
     Returns:
@@ -71,8 +197,32 @@ def send_broadcast(message: str, channel_access_token: Optional[str] = None) -> 
         "Authorization": f"Bearer {token}"
     }
 
+    payload = {"messages": messages[:5]}  # LINE APIは最大5メッセージまで
+
+    try:
+        response = requests.post(LINE_API_ENDPOINT, headers=headers, json=payload)
+        response.raise_for_status()
+        print("Message broadcast successful")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"Error sending LINE message: {e}")
+        if hasattr(e, "response") and e.response is not None:
+            print(f"Response: {e.response.text}")
+        return False
+
+
+def send_broadcast(message: str, channel_access_token: Optional[str] = None) -> bool:
+    """
+    全ての友だちにテキストメッセージをブロードキャスト送信
+
+    Args:
+        message: 送信するメッセージ
+        channel_access_token: LINE Channel Access Token
+
+    Returns:
+        送信成功時True
+    """
     # LINE APIはメッセージを5000文字まで送信可能
-    # 長すぎる場合は分割
     max_length = 5000
     messages = []
 
@@ -94,25 +244,14 @@ def send_broadcast(message: str, channel_access_token: Optional[str] = None) -> 
         if current_part:
             parts.append(current_part.strip())
 
-        messages = [{"type": "text", "text": part} for part in parts[:5]]  # 最大5メッセージ
+        messages = [{"type": "text", "text": part} for part in parts[:5]]
 
-    payload = {"messages": messages}
-
-    try:
-        response = requests.post(LINE_API_ENDPOINT, headers=headers, json=payload)
-        response.raise_for_status()
-        print(f"Message broadcast successful")
-        return True
-    except requests.exceptions.RequestException as e:
-        print(f"Error sending LINE message: {e}")
-        if hasattr(e, "response") and e.response is not None:
-            print(f"Response: {e.response.text}")
-        return False
+    return send_messages(messages, channel_access_token)
 
 
 def send_news(articles_with_summaries: list[tuple[NewsArticle, str]], channel_access_token: Optional[str] = None) -> bool:
     """
-    ニュースをLINEで配信
+    ニュースをLINEでFlex Messageカルーセル形式で配信
 
     Args:
         articles_with_summaries: (記事, 要約) のタプルのリスト
@@ -125,8 +264,12 @@ def send_news(articles_with_summaries: list[tuple[NewsArticle, str]], channel_ac
         print("No articles to send")
         return False
 
-    message = create_news_message(articles_with_summaries)
-    return send_broadcast(message, channel_access_token)
+    flex_message = create_flex_carousel_message(articles_with_summaries)
+    if flex_message is None:
+        print("Failed to create flex message")
+        return False
+
+    return send_messages([flex_message], channel_access_token)
 
 
 if __name__ == "__main__":
