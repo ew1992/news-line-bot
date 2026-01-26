@@ -6,7 +6,7 @@ import pytest
 from datetime import datetime
 from unittest.mock import patch
 from src.news_fetcher import NewsArticle
-from src.line_sender import create_carousel_message, send_news
+from src.line_sender import create_flex_carousel_message, send_news
 
 
 def create_test_article(
@@ -26,133 +26,152 @@ def create_test_article(
     return (article, summary)
 
 
-class TestCreateCarouselMessage:
-    """create_carousel_message関数のテスト"""
+class TestCreateFlexCarouselMessage:
+    """create_flex_carousel_message関数のテスト"""
 
-    def test_returns_template_type(self):
-        """テンプレートタイプがtemplateであること"""
+    def test_returns_flex_type(self):
+        """メッセージタイプがflexであること"""
         articles = [create_test_article()]
-        result = create_carousel_message(articles)
+        result = create_flex_carousel_message(articles)
 
-        assert result["type"] == "template"
+        assert result["type"] == "flex"
 
     def test_has_alt_text(self):
         """altTextが設定されていること"""
         articles = [create_test_article()]
-        result = create_carousel_message(articles)
+        result = create_flex_carousel_message(articles)
 
         assert "altText" in result
         assert len(result["altText"]) > 0
 
-    def test_template_type_is_carousel(self):
-        """template.typeがcarouselであること"""
+    def test_contents_type_is_carousel(self):
+        """contents.typeがcarouselであること"""
         articles = [create_test_article()]
-        result = create_carousel_message(articles)
+        result = create_flex_carousel_message(articles)
 
-        assert result["template"]["type"] == "carousel"
+        assert result["contents"]["type"] == "carousel"
 
-    def test_columns_count_matches_articles(self):
-        """カラム数が記事数と一致すること"""
+    def test_bubbles_count_matches_articles(self):
+        """バブル数が記事数と一致すること"""
         articles = [create_test_article() for _ in range(3)]
-        result = create_carousel_message(articles)
+        result = create_flex_carousel_message(articles)
 
-        assert len(result["template"]["columns"]) == 3
+        assert len(result["contents"]["contents"]) == 3
 
-    def test_max_10_columns(self):
-        """最大10カラムまでに制限されること"""
+    def test_max_10_bubbles(self):
+        """最大10バブルまでに制限されること"""
         articles = [create_test_article() for _ in range(15)]
-        result = create_carousel_message(articles)
+        result = create_flex_carousel_message(articles)
 
-        assert len(result["template"]["columns"]) == 10
+        assert len(result["contents"]["contents"]) == 10
 
-    def test_column_has_title(self):
-        """各カラムにタイトルがあること"""
-        articles = [create_test_article(title="テストタイトル")]
-        result = create_carousel_message(articles)
-
-        column = result["template"]["columns"][0]
-        assert "title" in column
-        assert column["title"] == "テストタイトル"
-
-    def test_column_title_max_40_chars(self):
-        """タイトルが40文字以内に切り詰められること"""
-        long_title = "あ" * 50
-        articles = [create_test_article(title=long_title)]
-        result = create_carousel_message(articles)
-
-        column = result["template"]["columns"][0]
-        assert len(column["title"]) <= 40
-
-    def test_column_has_text(self):
-        """各カラムにテキスト（要約）があること"""
-        articles = [create_test_article(summary="テスト要約")]
-        result = create_carousel_message(articles)
-
-        column = result["template"]["columns"][0]
-        assert "text" in column
-        assert "テスト要約" in column["text"]
-
-    def test_column_text_max_60_chars_with_title(self):
-        """テキストが60文字以内に切り詰められること（タイトルありの場合）"""
-        long_summary = "あ" * 100
-        articles = [create_test_article(summary=long_summary)]
-        result = create_carousel_message(articles)
-
-        column = result["template"]["columns"][0]
-        assert len(column["text"]) <= 60
-
-    def test_column_has_actions(self):
-        """各カラムにアクションがあること"""
+    def test_bubble_has_body(self):
+        """各バブルにbodyがあること"""
         articles = [create_test_article()]
-        result = create_carousel_message(articles)
+        result = create_flex_carousel_message(articles)
 
-        column = result["template"]["columns"][0]
-        assert "actions" in column
-        assert len(column["actions"]) >= 1
+        bubble = result["contents"]["contents"][0]
+        assert "body" in bubble
+        assert bubble["body"]["type"] == "box"
 
-    def test_action_is_uri_type(self):
-        """アクションがURIタイプであること"""
+    def test_bubble_has_footer_with_button(self):
+        """各バブルにfooter（ボタン付き）があること"""
         articles = [create_test_article(url="https://example.com/test")]
-        result = create_carousel_message(articles)
+        result = create_flex_carousel_message(articles)
 
-        action = result["template"]["columns"][0]["actions"][0]
-        assert action["type"] == "uri"
-        assert action["uri"] == "https://example.com/test"
+        bubble = result["contents"]["contents"][0]
+        assert "footer" in bubble
+        footer = bubble["footer"]
+        assert footer["type"] == "box"
 
-    def test_action_has_label(self):
-        """アクションにラベルがあること"""
+        button = footer["contents"][0]
+        assert button["type"] == "button"
+        assert button["action"]["type"] == "uri"
+        assert button["action"]["uri"] == "https://example.com/test"
+
+    def test_title_text_is_small_size(self):
+        """タイトルのフォントサイズが小さいこと"""
+        articles = [create_test_article(title="テストタイトル")]
+        result = create_flex_carousel_message(articles)
+
+        bubble = result["contents"]["contents"][0]
+        body_contents = bubble["body"]["contents"]
+        title_component = body_contents[0]
+
+        assert title_component["type"] == "text"
+        assert title_component["size"] in ["sm", "md"]
+
+    def test_title_text_contains_full_title(self):
+        """タイトルが全文表示されること"""
+        long_title = "これは非常に長いタイトルで40文字を超えています。全文が表示されるべきです。"
+        articles = [create_test_article(title=long_title)]
+        result = create_flex_carousel_message(articles)
+
+        bubble = result["contents"]["contents"][0]
+        title_component = bubble["body"]["contents"][0]
+        assert title_component["text"] == long_title
+
+    def test_title_has_wrap_enabled(self):
+        """タイトルが折り返し表示されること"""
         articles = [create_test_article()]
-        result = create_carousel_message(articles)
+        result = create_flex_carousel_message(articles)
 
-        action = result["template"]["columns"][0]["actions"][0]
-        assert "label" in action
-        assert len(action["label"]) > 0
+        bubble = result["contents"]["contents"][0]
+        title_component = bubble["body"]["contents"][0]
+        assert title_component.get("wrap") is True
+
+    def test_summary_text_contains_full_summary(self):
+        """要約が全文表示されること"""
+        long_summary = "これは非常に長い要約文で、60文字を超えています。Flex Messageでは全文が表示されるべきです。テンプレートでは切り詰められていましたが、もう切り詰められません。"
+        articles = [create_test_article(summary=long_summary)]
+        result = create_flex_carousel_message(articles)
+
+        bubble = result["contents"]["contents"][0]
+        body_contents = bubble["body"]["contents"]
+        summary_component = body_contents[1]
+        assert summary_component["text"] == long_summary
+
+    def test_summary_has_wrap_enabled(self):
+        """要約が折り返し表示されること"""
+        articles = [create_test_article()]
+        result = create_flex_carousel_message(articles)
+
+        bubble = result["contents"]["contents"][0]
+        summary_component = bubble["body"]["contents"][1]
+        assert summary_component.get("wrap") is True
+
+    def test_body_has_padding(self):
+        """bodyにパディングがあること"""
+        articles = [create_test_article()]
+        result = create_flex_carousel_message(articles)
+
+        bubble = result["contents"]["contents"][0]
+        body = bubble["body"]
+        assert "paddingAll" in body or "paddingTop" in body
 
     def test_empty_articles_returns_none(self):
         """空の記事リストの場合はNoneを返すこと"""
-        result = create_carousel_message([])
+        result = create_flex_carousel_message([])
 
         assert result is None
 
-    def test_multiple_articles_creates_multiple_columns(self):
-        """複数の記事が複数のカラムになること"""
+    def test_multiple_articles_creates_multiple_bubbles(self):
+        """複数の記事が複数のバブルになること"""
         articles = [
             create_test_article(title="記事1", url="https://example.com/1"),
             create_test_article(title="記事2", url="https://example.com/2"),
         ]
-        result = create_carousel_message(articles)
+        result = create_flex_carousel_message(articles)
 
-        columns = result["template"]["columns"]
-        assert len(columns) == 2
-        assert columns[0]["title"] == "記事1"
-        assert columns[1]["title"] == "記事2"
+        bubbles = result["contents"]["contents"]
+        assert len(bubbles) == 2
 
 
 class TestSendNews:
     """send_news関数のテスト"""
 
-    def test_sends_carousel_message(self):
-        """カルーセルメッセージが送信されること"""
+    def test_sends_flex_carousel_message(self):
+        """Flex Messageカルーセルが送信されること"""
         articles = [create_test_article()]
 
         with patch("src.line_sender.send_messages") as mock_send:
@@ -162,11 +181,10 @@ class TestSendNews:
         assert result is True
         mock_send.assert_called_once()
 
-        # 送信されたメッセージがカルーセル形式であることを確認
         sent_messages = mock_send.call_args[0][0]
         assert len(sent_messages) == 1
-        assert sent_messages[0]["type"] == "template"
-        assert sent_messages[0]["template"]["type"] == "carousel"
+        assert sent_messages[0]["type"] == "flex"
+        assert sent_messages[0]["contents"]["type"] == "carousel"
 
     def test_returns_false_when_no_articles(self):
         """記事がない場合はFalseを返すこと"""

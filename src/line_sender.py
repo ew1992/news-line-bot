@@ -62,7 +62,7 @@ def truncate_text(text: str, max_length: int) -> str:
 
 def create_carousel_message(articles_with_summaries: list[tuple[NewsArticle, str]]) -> Optional[dict]:
     """
-    カルーセルテンプレートメッセージを作成
+    カルーセルテンプレートメッセージを作成（旧形式、文字数制限あり）
 
     Args:
         articles_with_summaries: (記事, 要約) のタプルのリスト
@@ -73,16 +73,12 @@ def create_carousel_message(articles_with_summaries: list[tuple[NewsArticle, str
     if not articles_with_summaries:
         return None
 
-    # カルーセルは最大10カラムまで
     max_columns = 10
     articles = articles_with_summaries[:max_columns]
 
     columns = []
     for article, summary in articles:
-        # タイトルは最大40文字
         title = truncate_text(article.title, 40)
-
-        # テキストは最大60文字（タイトルありの場合）
         text = truncate_text(summary, 60)
 
         column = {
@@ -106,6 +102,79 @@ def create_carousel_message(articles_with_summaries: list[tuple[NewsArticle, str
         "template": {
             "type": "carousel",
             "columns": columns
+        }
+    }
+
+
+def create_flex_carousel_message(articles_with_summaries: list[tuple[NewsArticle, str]]) -> Optional[dict]:
+    """
+    Flex Messageカルーセル形式でニュースメッセージを作成
+
+    Args:
+        articles_with_summaries: (記事, 要約) のタプルのリスト
+
+    Returns:
+        Flex Messageのdict、記事がない場合はNone
+    """
+    if not articles_with_summaries:
+        return None
+
+    max_bubbles = 10
+    articles = articles_with_summaries[:max_bubbles]
+
+    bubbles = []
+    for article, summary in articles:
+        bubble = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": article.title,
+                        "weight": "bold",
+                        "size": "sm",
+                        "wrap": True
+                    },
+                    {
+                        "type": "text",
+                        "text": summary,
+                        "size": "sm",
+                        "color": "#666666",
+                        "margin": "md",
+                        "wrap": True
+                    }
+                ],
+                "paddingAll": "lg"
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "action": {
+                            "type": "uri",
+                            "label": "記事を読む",
+                            "uri": article.url
+                        }
+                    }
+                ],
+                "paddingAll": "md"
+            }
+        }
+        bubbles.append(bubble)
+
+    today = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y/%m/%d")
+
+    return {
+        "type": "flex",
+        "altText": f"本日の生成AIニュース ({today})",
+        "contents": {
+            "type": "carousel",
+            "contents": bubbles
         }
     }
 
@@ -182,7 +251,7 @@ def send_broadcast(message: str, channel_access_token: Optional[str] = None) -> 
 
 def send_news(articles_with_summaries: list[tuple[NewsArticle, str]], channel_access_token: Optional[str] = None) -> bool:
     """
-    ニュースをLINEでカルーセルテンプレート形式で配信
+    ニュースをLINEでFlex Messageカルーセル形式で配信
 
     Args:
         articles_with_summaries: (記事, 要約) のタプルのリスト
@@ -195,12 +264,12 @@ def send_news(articles_with_summaries: list[tuple[NewsArticle, str]], channel_ac
         print("No articles to send")
         return False
 
-    carousel_message = create_carousel_message(articles_with_summaries)
-    if carousel_message is None:
-        print("Failed to create carousel message")
+    flex_message = create_flex_carousel_message(articles_with_summaries)
+    if flex_message is None:
+        print("Failed to create flex message")
         return False
 
-    return send_messages([carousel_message], channel_access_token)
+    return send_messages([flex_message], channel_access_token)
 
 
 if __name__ == "__main__":
