@@ -134,7 +134,7 @@ def create_flex_carousel_message(articles_with_summaries: list[tuple[NewsArticle
                         "type": "text",
                         "text": article.title,
                         "weight": "bold",
-                        "size": "sm",
+                        "size": "md",
                         "wrap": True
                     },
                     {
@@ -142,11 +142,11 @@ def create_flex_carousel_message(articles_with_summaries: list[tuple[NewsArticle
                         "text": summary,
                         "size": "sm",
                         "color": "#666666",
-                        "margin": "md",
+                        "margin": "lg",
                         "wrap": True
                     }
                 ],
-                "paddingAll": "lg"
+                "paddingAll": "xl"
             },
             "footer": {
                 "type": "box",
@@ -154,7 +154,7 @@ def create_flex_carousel_message(articles_with_summaries: list[tuple[NewsArticle
                 "contents": [
                     {
                         "type": "button",
-                        "style": "primary",
+                        "style": "link",
                         "action": {
                             "type": "uri",
                             "label": "記事を読む",
@@ -162,7 +162,7 @@ def create_flex_carousel_message(articles_with_summaries: list[tuple[NewsArticle
                         }
                     }
                 ],
-                "paddingAll": "md"
+                "paddingAll": "lg"
             }
         }
         bubbles.append(bubble)
