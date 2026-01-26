@@ -1,9 +1,9 @@
 name: Daily Tech News
 
 on:
-  # 毎日 UTC 0:00 (日本時間 9:00) に実行
+  # 毎日 UTC 22:30 (日本時間 7:30) に実行
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '30 22 * * *'
 
   # 手動実行も可能
   workflow_dispatch:
