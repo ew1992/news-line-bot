@@ -11,10 +11,12 @@ categories:
     sources:
       - url: "https://rss.itmedia.co.jp/rss/2.0/aiplus.xml"
         name: "ITmedia AI＋ - 生成AI"
+        schedule: "weekday"
+      - url: "https://news.google.com/rss/search?q=%E7%94%9F%E6%88%90AI&hl=ja&gl=JP&ceid=JP:ja"
+        name: "Google News - 生成AI"
+        schedule: "weekend"
 
-# カテゴリを追加する例:
-# - name: "セキュリティ"
-#   enabled: true
-#   sources:
-#     - url: "https://news.google.com/rss/search?q=サイバーセキュリティ&hl=ja&gl=JP&ceid=JP:ja"
-#       name: "Google News - セキュリティ"
+# schedule設定:
+#   weekday: 平日（月〜金）のみ使用
+#   weekend: 土日のみ使用
+#   未設定: 常に使用
