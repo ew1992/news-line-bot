@@ -298,11 +298,20 @@ def fetch_news(config_path: Optional[Path] = None, max_articles: Optional[int] =
 
         category_name = category.get("name", "Unknown")
 
+        today = datetime.now()
+        is_weekend = today.weekday() >= 5  # 5=土, 6=日
+
         for source in category.get("sources", []):
             url = source.get("url")
             source_name = source.get("name", url)
+            schedule = source.get("schedule")
 
             if not url:
+                continue
+
+            if schedule == "weekday" and is_weekend:
+                continue
+            if schedule == "weekend" and not is_weekend:
                 continue
 
             articles = fetch_from_rss(url, source_name, category_name)
